@@ -1,6 +1,6 @@
 // ============================================================================
-// APLIKASI PRESENSI - WORKERS + D1 + R2 + PWA + PWD + DARK MODE + DASHBOARD + Admin
-// Version 5.7.0 - Production Ready
+// APLIKASI PRESENSI - WORKERS + D1 + R2 + PWA + PWD + DARK MODE + Hide DASHBOARD
+// Version 5.7.4 - Production Ready (update perhitungan jarak)
 // ============================================================================
 //
 // FITUR:
@@ -487,87 +487,73 @@ async function handleGetStatus(request, env) {
 async function handleClockIn(request, env) {
     try {
         const body = await request.json();
-        const { nik, nama, stockPoint, lat, lng, photoBase64, jarak, isBuffer, nikKtp, namaBuffer, karyawanNama, karyawanNik } = body;
+        const { nik, nama, stockPoint, lat, lng, photoBase64, isBuffer, nikKtp, namaBuffer, karyawanNama, karyawanNik } = body;
         const today = getTodayDate();
         const now = getLocalTimestamp();
-        const url = new URL(request.url); // Get current worker URL
+        const url = new URL(request.url);
 
-        // Upload photo to R2
         const photoKey = isBuffer
-            ? `buffer/${today}/IN_${nikKtp}_${Date.now()}.jpg`
-            : `normal/${today}/IN_${nik}_${Date.now()}.jpg`;
+            ? 'buffer/' + today + '/IN_' + nikKtp + '_' + Date.now() + '.jpg'
+            : 'normal/' + today + '/IN_' + nik + '_' + Date.now() + '.jpg';
 
-        const photoData = photoBase64.split(',')[1]; // Remove data:image/jpeg;base64,
+        const photoData = photoBase64.split(',')[1];
         const photoBuffer = Uint8Array.from(atob(photoData), c => c.charCodeAt(0));
 
         await env.PHOTOS.put(photoKey, photoBuffer, {
             httpMetadata: { contentType: 'image/jpeg' }
         });
 
-        // Use Worker URL to serve photo
-        const photoUrl = `${url.origin}/photos/${photoKey}`;
+        const photoUrl = url.origin + '/photos/' + photoKey;
+
+        const targetNik = isBuffer ? (karyawanNik || nik) : nik;
+
+        const karyawanData = await env.DB.prepare(
+            'SELECT k.cabang, c.latitude, c.longitude FROM karyawan k LEFT JOIN cabang c ON k.stock_point = c.stock_point WHERE k.nik = ?'
+        ).bind(targetNik).first();
+
+        const cabangName = karyawanData ? karyawanData.cabang : 'Unknown';
+        const cabangLat = karyawanData ? parseFloat(karyawanData.latitude) : 0;
+        const cabangLng = karyawanData ? parseFloat(karyawanData.longitude) : 0;
+
+        let jarakMeter = 0;
+        if (cabangLat !== 0 && cabangLng !== 0 && lat && lng) {
+            jarakMeter = calculateDistance(cabangLat, cabangLng, parseFloat(lat), parseFloat(lng));
+        }
 
         if (isBuffer) {
-            // Check duplicate
-            const existing = await env.DB.prepare(`
-                SELECT id FROM absensi_buffer WHERE tanggal = ? AND nik_ktp = ?
-            `).bind(today, nikKtp).first();
+            const existing = await env.DB.prepare(
+                'SELECT id FROM absensi_buffer WHERE tanggal = ? AND nik_ktp = ?'
+            ).bind(today, nikKtp).first();
 
             if (existing) {
                 return jsonResponse({ error: 'NIK KTP sudah absen hari ini' }, 400);
             }
 
-            // Get cabang (Fix undefined error)
-            // Use karyawanNik for buffer query
-            const targetNik = karyawanNik || nik;
-
-            const karyawanData = await env.DB.prepare(`
-                SELECT cabang FROM karyawan WHERE nik = ?
-            `).bind(targetNik).first();
-
-            const cabangName = karyawanData ? karyawanData.cabang : 'Unknown';
-
-            // Insert buffer attendance
-            await env.DB.prepare(`
-                INSERT INTO absensi_buffer 
-                (tanggal, nik_ktp, nama_buffer, nik_oms, karyawan_digantikan, cabang, stock_point,
-                 time_in, lokasi_in_lat, lokasi_in_lng, lokasi_in_url, jarak_in, photo_in_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).bind(
+            await env.DB.prepare(
+                'INSERT INTO absensi_buffer (tanggal, nik_ktp, nama_buffer, nik_oms, karyawan_digantikan, cabang, stock_point, time_in, lokasi_in_lat, lokasi_in_lng, lokasi_in_url, jarak_in, photo_in_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            ).bind(
                 today, nikKtp, namaBuffer, targetNik, karyawanNama, cabangName, stockPoint || 'Unknown',
-                now, lat, lng, `https://www.google.com/maps?q=${lat},${lng}`, jarak, photoUrl
+                now, lat, lng, 'https://www.google.com/maps?q=' + lat + ',' + lng, jarakMeter, photoUrl
             ).run();
 
         } else {
-            // Check duplicate
-            const existing = await env.DB.prepare(`
-                SELECT id FROM absensi WHERE tanggal = ? AND nik = ?
-            `).bind(today, nik).first();
+            const existing = await env.DB.prepare(
+                'SELECT id FROM absensi WHERE tanggal = ? AND nik = ?'
+            ).bind(today, nik).first();
 
             if (existing) {
                 return jsonResponse({ error: 'Anda sudah Absen Masuk hari ini' }, 400);
             }
 
-            // Get cabang (Fix undefined error)
-            const karyawanData = await env.DB.prepare(`
-                SELECT cabang FROM karyawan WHERE nik = ?
-            `).bind(nik).first();
-
-            const cabangName = karyawanData ? karyawanData.cabang : 'Unknown';
-
-            // Insert normal attendance
-            await env.DB.prepare(`
-                INSERT INTO absensi 
-                (tanggal, nik, nama, cabang, stock_point,
-                 time_in, lokasi_in_lat, lokasi_in_lng, lokasi_in_url, jarak_in, photo_in_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `).bind(
+            await env.DB.prepare(
+                'INSERT INTO absensi (tanggal, nik, nama, cabang, stock_point, time_in, lokasi_in_lat, lokasi_in_lng, lokasi_in_url, jarak_in, photo_in_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            ).bind(
                 today, nik, nama, cabangName, stockPoint || 'Unknown',
-                now, lat, lng, `https://www.google.com/maps?q=${lat},${lng}`, jarak, photoUrl
+                now, lat, lng, 'https://www.google.com/maps?q=' + lat + ',' + lng, jarakMeter, photoUrl
             ).run();
         }
 
-        return jsonResponse({ success: true, time: now });
+        return jsonResponse({ success: true, time: now, jarak: jarakMeter });
 
     } catch (error) {
         console.error('Clock In Error:', error);
@@ -578,15 +564,14 @@ async function handleClockIn(request, env) {
 async function handleClockOut(request, env) {
     try {
         const body = await request.json();
-        const { nik, lat, lng, photoBase64, jarak, isBuffer, nikKtp } = body;
+        const { nik, lat, lng, photoBase64, isBuffer, nikKtp } = body;
         const today = getTodayDate();
         const now = getLocalTimestamp();
         const url = new URL(request.url);
 
-        // Upload photo to R2
         const photoKey = isBuffer
-            ? `buffer/${today}/OUT_${nikKtp}_${Date.now()}.jpg`
-            : `normal/${today}/OUT_${nik}_${Date.now()}.jpg`;
+            ? 'buffer/' + today + '/OUT_' + nikKtp + '_' + Date.now() + '.jpg'
+            : 'normal/' + today + '/OUT_' + nik + '_' + Date.now() + '.jpg';
 
         const photoData = photoBase64.split(',')[1];
         const photoBuffer = Uint8Array.from(atob(photoData), c => c.charCodeAt(0));
@@ -595,13 +580,12 @@ async function handleClockOut(request, env) {
             httpMetadata: { contentType: 'image/jpeg' }
         });
 
-        const photoUrl = `${url.origin}/photos/${photoKey}`;
+        const photoUrl = url.origin + '/photos/' + photoKey;
 
         if (isBuffer) {
-            // Get existing record
-            const absen = await env.DB.prepare(`
-                SELECT * FROM absensi_buffer WHERE tanggal = ? AND nik_ktp = ?
-            `).bind(today, nikKtp).first();
+            const absen = await env.DB.prepare(
+                'SELECT * FROM absensi_buffer WHERE tanggal = ? AND nik_ktp = ?'
+            ).bind(today, nikKtp).first();
 
             if (!absen) {
                 return jsonResponse({ error: 'Belum Absen Masuk hari ini' }, 400);
@@ -611,33 +595,38 @@ async function handleClockOut(request, env) {
                 return jsonResponse({ error: 'Sudah Absen Pulang hari ini' }, 400);
             }
 
-            // Calculate duration
+            const karyawanData = await env.DB.prepare(
+                'SELECT k.cabang, c.latitude, c.longitude FROM karyawan k LEFT JOIN cabang c ON k.stock_point = c.stock_point WHERE k.nik = ?'
+            ).bind(absen.nik_oms).first();
+
+            const cabangLat = karyawanData ? parseFloat(karyawanData.latitude) : 0;
+            const cabangLng = karyawanData ? parseFloat(karyawanData.longitude) : 0;
+
+            let jarakMeter = 0;
+            if (cabangLat !== 0 && cabangLng !== 0 && lat && lng) {
+                jarakMeter = calculateDistance(cabangLat, cabangLng, parseFloat(lat), parseFloat(lng));
+            }
+
             const timeIn = new Date(absen.time_in.replace(' ', 'T'));
             const timeOut = new Date(now.replace(' ', 'T'));
             const durasiMenit = Math.round((timeOut - timeIn) / 60000);
             const jam = Math.floor(durasiMenit / 60);
             const menit = durasiMenit % 60;
-            const durasiText = `${jam} jam ${menit} menit`;
+            const durasiText = jam + ' jam ' + menit + ' menit';
 
-            // Update record
-            await env.DB.prepare(`
-                UPDATE absensi_buffer SET
-                time_out = ?, lokasi_out_lat = ?, lokasi_out_lng = ?, lokasi_out_url = ?,
-                jarak_out = ?, photo_out_url = ?, durasi_menit = ?, durasi_text = ?,
-                updated_at = CURRENT_TIMESTAMP
-                WHERE tanggal = ? AND nik_ktp = ?
-            `).bind(
-                now, lat, lng, `https://www.google.com/maps?q=${lat},${lng}`,
-                jarak, photoUrl, durasiMenit, durasiText, today, nikKtp
+            await env.DB.prepare(
+                'UPDATE absensi_buffer SET time_out = ?, lokasi_out_lat = ?, lokasi_out_lng = ?, lokasi_out_url = ?, jarak_out = ?, photo_out_url = ?, durasi_menit = ?, durasi_text = ?, updated_at = CURRENT_TIMESTAMP WHERE tanggal = ? AND nik_ktp = ?'
+            ).bind(
+                now, lat, lng, 'https://www.google.com/maps?q=' + lat + ',' + lng,
+                jarakMeter, photoUrl, durasiMenit, durasiText, today, nikKtp
             ).run();
 
-            return jsonResponse({ success: true, time: now, durasi: durasiText });
+            return jsonResponse({ success: true, time: now, durasi: durasiText, jarak: jarakMeter });
 
         } else {
-            // Get existing record
-            const absen = await env.DB.prepare(`
-                SELECT * FROM absensi WHERE tanggal = ? AND nik = ?
-            `).bind(today, nik).first();
+            const absen = await env.DB.prepare(
+                'SELECT * FROM absensi WHERE tanggal = ? AND nik = ?'
+            ).bind(today, nik).first();
 
             if (!absen) {
                 return jsonResponse({ error: 'Belum Absen Masuk hari ini' }, 400);
@@ -647,27 +636,33 @@ async function handleClockOut(request, env) {
                 return jsonResponse({ error: 'Sudah Absen Pulang hari ini' }, 400);
             }
 
-            // Calculate duration
+            const karyawanData = await env.DB.prepare(
+                'SELECT k.cabang, c.latitude, c.longitude FROM karyawan k LEFT JOIN cabang c ON k.stock_point = c.stock_point WHERE k.nik = ?'
+            ).bind(nik).first();
+
+            const cabangLat = karyawanData ? parseFloat(karyawanData.latitude) : 0;
+            const cabangLng = karyawanData ? parseFloat(karyawanData.longitude) : 0;
+
+            let jarakMeter = 0;
+            if (cabangLat !== 0 && cabangLng !== 0 && lat && lng) {
+                jarakMeter = calculateDistance(cabangLat, cabangLng, parseFloat(lat), parseFloat(lng));
+            }
+
             const timeIn = new Date(absen.time_in.replace(' ', 'T'));
             const timeOut = new Date(now.replace(' ', 'T'));
             const durasiMenit = Math.round((timeOut - timeIn) / 60000);
             const jam = Math.floor(durasiMenit / 60);
             const menit = durasiMenit % 60;
-            const durasiText = `${jam} jam ${menit} menit`;
+            const durasiText = jam + ' jam ' + menit + ' menit';
 
-            // Update record
-            await env.DB.prepare(`
-                UPDATE absensi SET
-                time_out = ?, lokasi_out_lat = ?, lokasi_out_lng = ?, lokasi_out_url = ?,
-                jarak_out = ?, photo_out_url = ?, durasi_menit = ?, durasi_text = ?,
-                updated_at = CURRENT_TIMESTAMP
-                WHERE tanggal = ? AND nik = ?
-            `).bind(
-                now, lat, lng, `https://www.google.com/maps?q=${lat},${lng}`,
-                jarak, photoUrl, durasiMenit, durasiText, today, nik
+            await env.DB.prepare(
+                'UPDATE absensi SET time_out = ?, lokasi_out_lat = ?, lokasi_out_lng = ?, lokasi_out_url = ?, jarak_out = ?, photo_out_url = ?, durasi_menit = ?, durasi_text = ?, updated_at = CURRENT_TIMESTAMP WHERE tanggal = ? AND nik = ?'
+            ).bind(
+                now, lat, lng, 'https://www.google.com/maps?q=' + lat + ',' + lng,
+                jarakMeter, photoUrl, durasiMenit, durasiText, today, nik
             ).run();
 
-            return jsonResponse({ success: true, time: now, durasi: durasiText });
+            return jsonResponse({ success: true, time: now, durasi: durasiText, jarak: jarakMeter });
         }
 
     } catch (error) {
@@ -684,7 +679,7 @@ async function handleReportToday(request, env) {
     try {
         const url = new URL(request.url);
         const cabang = url.searchParams.get('cabang');
-        const today = getTodayDate();
+        const today = url.searchParams.get('tanggal') || getTodayDate();
 
         let query = `
             SELECT 
@@ -1589,7 +1584,7 @@ function getDashboardHTML() {
                 
                 renderCabangOptions(cabangs);
             } catch (e) {
-                console.error('Failed to load cabang list:', e);
+                console.error('Gagal memuat daftar cabang:', e);
             }
         }
 
@@ -1681,6 +1676,7 @@ function getDashboardHTML() {
             try {
                 const params = new URLSearchParams();
                 if (currentCabang) params.append('cabang', currentCabang);
+                if (currentTanggal) params.append('tanggal', currentTanggal);
                 
                 // Load total karyawan first if not loaded
                 if (document.getElementById('totalKaryawan').textContent === '-') {
@@ -1972,11 +1968,6 @@ function getDashboardHTML() {
         async function exportExcel() {
             alert('Excel export akan segera tersedia. Gunakan CSV untuk sementara.');
         }
-
-        // Auto refresh every 60 seconds
-        setInterval(() => {
-            loadDashboard();
-        }, 60000);
     </script>
 </body>
 </html>`;
@@ -2795,7 +2786,7 @@ function getLoginHTML() {
             
             <button class="btn-primary" onclick="login()">MASUK</button>
             <button class="btn-secondary" onclick="toggleBuffer(true)">👥 ABSEN BUFFER</button>
-            <button class="btn-secondary" onclick="location.href='/dashboard'" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">📊 DASHBOARD SEMUA KARYAWAN</button>
+            <button class="btn-secondary" onclick="location.href='/dashboard'" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; display: none;">📊 DASHBOARD SEMUA KARYAWAN</button>
             <div id="loginError" class="error"></div>
         </div>
 
