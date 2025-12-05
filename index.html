@@ -3,199 +3,266 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Presensi</title>
-    <style><!DOCTYPE html>
-<html lang="id">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard Presensi</title>
+    <title>Presensi Harian (GitHub Pages)</title>
+    <!-- Memuat Tailwind CSS untuk styling modern -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Konfigurasi Font Inter -->
     <style>
-        /* CSS untuk tema dan tampilan */
         body {
-            font-family: Arial, sans-serif;
-            background: #f7f7f7;
-            color: #333;
-            padding: 20px;
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Warna latar belakang abu-abu terang */
         }
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 20px;
+        .container-card {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
         }
-        .theme-toggle {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            background-color: #4CAF50;
-            color: white;
-            border: none;
-            border-radius: 50%;
-            padding: 10px;
-            cursor: pointer;
-        }
-        .header {
-            background: white;
-            padding: 30px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-            margin-bottom: 30px;
-        }
-        .header h1 { color: #667eea; margin-bottom: 10px; }
-        .filters {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 15px;
-            margin-top: 20px;
-        }
-        .filters select, .filters input, .filters button {
-            padding: 12px;
-            border: 2px solid #e0e0e0;
-            border-radius: 8px;
-            font-size: 14px;
-        }
-        .filters button {
-            background: #667eea;
-            color: white;
-            border: none;
-            cursor: pointer;
-            font-weight: 600;
-            transition: 0.3s;
-        }
-        .filters button:hover { background: #5568d3; }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stat-card {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
-        }
-        .stat-card h3 { color: #666; font-size: 14px; margin-bottom: 10px; }
-        .stat-card .number { font-size: 36px; font-weight: bold; color: #667eea; }
-        .stat-card .percentage { color: #10b981; font-size: 14px; margin-top: 5px; }
     </style>
 </head>
-<body>
-    <div class="container">
-        <button class="theme-toggle" id="themeToggle">🌙</button>
-        <div class="header">
-            <h1>📊 Dashboard Presensi</h1>
-            <p style="color: #666; margin-top: 5px;">Real-time monitoring kehadiran karyawan</p>
-            
-            <div class="filters">
-                <select id="filterCabang">
-                    <option value="">Semua Cabang</option>
+<body class="p-4 md:p-8 min-h-screen flex items-center justify-center">
+
+    <!-- Kontainer Utama Aplikasi -->
+    <div class="container-card bg-white p-6 md:p-10 rounded-xl w-full max-w-lg">
+        <h1 class="text-3xl font-extrabold text-gray-900 mb-2">Presensi Harian</h1>
+        <p class="text-gray-500 mb-8">Selamat datang, Anom! Silakan Catat Kehadiran Anda.</p>
+
+        <!-- Form Presensi -->
+        <form id="attendanceForm" class="space-y-6">
+            <div>
+                <label for="nama" class="block text-sm font-medium text-gray-700 mb-1">Nama Karyawan</label>
+                <input type="text" id="nama" required
+                       class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+            </div>
+
+            <div>
+                <label for="cabang" class="block text-sm font-medium text-gray-700 mb-1">Cabang</label>
+                <select id="cabang" required
+                        class="mt-1 block w-full px-3 py-2 border border-gray-300 bg-white rounded-lg shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 transition duration-150 ease-in-out">
+                    <option value="" disabled selected>Pilih Cabang</option>
+                    <option value="Jakarta">Jakarta</option>
+                    <option value="Surabaya">Surabaya</option>
+                    <option value="Bandung">Bandung</option>
+                    <option value="Medan">Medan</option>
                 </select>
-                <input type="date" id="filterTanggal" />
-                <button onclick="debounceLoadDashboard()">🔍 Filter</button>
-                <button onclick="resetFilter()">🔄 Reset</button>
             </div>
+
+            <!-- Tombol Aksi -->
+            <div class="flex flex-col space-y-3">
+                <button type="button" onclick="handleAttendance('hadir')"
+                        id="btnHadir"
+                        class="w-full flex justify-center py-3 px-4 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition duration-150 ease-in-out">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    CATAT KEHADIRAN (Clock In)
+                </button>
+
+                <button type="button" onclick="handleAttendance('pulang')"
+                        id="btnPulang"
+                        class="w-full flex justify-center py-3 px-4 border border-gray-300 rounded-lg shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition duration-150 ease-in-out">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    CATAT KEPULANGAN (Clock Out)
+                </button>
+            </div>
+        </form>
+
+        <!-- Kotak Pesan Status/Error -->
+        <div id="messageBox" class="mt-6 p-4 rounded-lg hidden" role="alert">
+            <p id="messageText" class="text-sm font-medium"></p>
         </div>
 
-        <!-- Top Actions: Back to Login & Admin Panel -->
-        <div style="display:flex; gap:12px; align-items:center; margin: 18px 0;">
-            <a href="/" style="display:inline-block; padding:10px 14px; background:#f3f4f6; color:#667eea; text-decoration:none; border-radius:8px; font-weight:600;">← Kembali ke Login</a>
-            <a href="/admin-panel" style="display:inline-block; padding:10px 14px; background:#fef3c7; color:#92400e; text-decoration:none; border-radius:8px; font-weight:700;">🔐 Admin</a>
-        </div>
-
-        <!-- Stats Cards -->
-        <div class="stats">
-            <div class="stat-card">
-                <h3>Total Karyawan</h3>
-                <div class="number" id="totalKaryawan">0</div>
-            </div>
-            <div class="stat-card">
-                <h3>Hadir Hari Ini</h3>
-                <div class="number" id="hadirHariIni">0</div>
-                <div class="percentage" id="persentaseHadir">0%</div>
-            </div>
-            <div class="stat-card">
-                <h3>Sudah Pulang</h3>
-                <div class="number" id="sudahPulang">0</div>
-            </div>
-            <div class="stat-card">
-                <h3>Belum Pulang</h3>
-                <div class="number" id="belumPulang">0</div>
+        <!-- Dashboard Sederhana (Hanya tampilan status hari ini) -->
+        <div class="mt-8 pt-6 border-t border-gray-200">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">Status Presensi Hari Ini</h2>
+            <div id="statusDashboard" class="space-y-3">
+                <!-- Data status akan dimuat di sini -->
+                <p class="text-gray-500">Memuat data...</p>
             </div>
         </div>
-        
-        <div id="loadingMessage" style="text-align:center; display:none;">Loading...</div>
 
     </div>
 
+    <!-- Script JavaScript untuk Logika Aplikasi -->
     <script>
-        // Example of JavaScript logic for Dashboard
-        const themeToggleBtn = document.getElementById('themeToggle');
-        initTheme();
+        // ====================================================================
+        // KONFIGURASI API (GANTI INI DENGAN URL GOOGLE APPS SCRIPT ANDA)
+        // ====================================================================
+        const GOOGLE_SHEETS_WEB_APP_URL = "https://script.google.com/macros/s/YOUR_DEPLOYED_WEB_APP_ID/exec";
+        // Contoh URL yang benar: "https://script.google.com/macros/s/AKfycbwQ4eR6sO1eX1J2Y3Z4A5B6C7D8E9F0G1H2I3J4K5L6M7N8O9P0Q1R2S3T4U5V6W7X8Y9Z0/exec"
 
-        // Function to toggle theme
-        function toggleTheme() {
-            const current = document.documentElement.getAttribute('data-theme') || 'light';
-            const next = current === 'dark' ? 'light' : 'dark';
-            document.documentElement.setAttribute('data-theme', next);
-            localStorage.setItem('theme', next);
-            updateThemeIcon(next);
+        // ====================================================================
+        // UTILITY FUNCTIONS
+        // ====================================================================
+
+        /**
+         * Menampilkan pesan ke pengguna (sukses/gagal)
+         * @param {string} message - Pesan yang akan ditampilkan
+         * @param {string} type - 'success' atau 'error'
+         */
+        function showMessage(message, type) {
+            const messageBox = document.getElementById('messageBox');
+            const messageText = document.getElementById('messageText');
+
+            messageText.textContent = message;
+            messageBox.classList.remove('hidden', 'bg-red-100', 'text-red-800', 'bg-green-100', 'text-green-800');
+
+            if (type === 'success') {
+                messageBox.classList.add('bg-green-100', 'text-green-800');
+            } else if (type === 'error') {
+                messageBox.classList.add('bg-red-100', 'text-red-800');
+            }
+            messageBox.classList.remove('hidden');
+
+            // Sembunyikan pesan setelah 5 detik
+            setTimeout(() => {
+                messageBox.classList.add('hidden');
+            }, 5000);
         }
 
-        // Update icon for theme
-        function updateThemeIcon(theme) {
-            if (themeToggleBtn) {
-                themeToggleBtn.textContent = theme === 'dark' ? '☀️' : '🌙';
-                themeToggleBtn.title = theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode';
+        /**
+         * Mengirim data ke Google Sheets melalui Apps Script
+         * @param {string} action - 'hadir' atau 'pulang'
+         * @param {Object} data - Data presensi
+         */
+        async function sendToGoogleSheets(action, data) {
+            const finalData = {
+                action: action,
+                nama: data.nama,
+                cabang: data.cabang,
+                timestamp: new Date().toISOString()
+            };
+
+            // Menggunakan Fetch API untuk mengirim data
+            try {
+                // Tampilkan indikator loading
+                document.getElementById('btnHadir').disabled = true;
+                document.getElementById('btnPulang').disabled = true;
+
+                const url = new URL(GOOGLE_SHEETS_WEB_APP_URL);
+                
+                // Tambahkan parameter ke URL (ini menggunakan GET, yang umum untuk Apps Script sederhana)
+                // Jika Apps Script Anda menggunakan POST, Anda harus mengubah method di fetch.
+                Object.keys(finalData).forEach(key => url.searchParams.append(key, finalData[key]));
+
+                const response = await fetch(url.toString(), {
+                    method: 'GET' // Ganti ke 'POST' jika Apps Script Anda dikonfigurasi untuk POST
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Permintaan gagal dengan status ${response.status}`);
+                }
+
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    showMessage(`Presensi ${action.toUpperCase()} berhasil dicatat.`, 'success');
+                } else {
+                    throw new Error(result.message || 'Gagal mencatat presensi.');
+                }
+
+            } catch (error) {
+                console.error('Error saat mengirim data:', error);
+                showMessage(`Gagal: ${error.message}. Pastikan URL Apps Script sudah benar.`, 'error');
+            } finally {
+                // Sembunyikan indikator loading
+                document.getElementById('btnHadir').disabled = false;
+                document.getElementById('btnPulang').disabled = false;
             }
         }
+        
+        // ====================================================================
+        // MAIN HANDLERS
+        // ====================================================================
 
-        // Initialize theme
-        function initTheme() {
-            const savedTheme = localStorage.getItem('theme') || 'light';
-            document.documentElement.setAttribute('data-theme', savedTheme);
-            updateThemeIcon(savedTheme);
+        /**
+         * Menangani tombol Hadir atau Pulang
+         * @param {string} type - 'hadir' atau 'pulang'
+         */
+        async function handleAttendance(type) {
+            const namaInput = document.getElementById('nama');
+            const cabangInput = document.getElementById('cabang');
+
+            const nama = namaInput.value.trim();
+            const cabang = cabangInput.value;
+
+            if (!nama || !cabang) {
+                showMessage('Nama dan Cabang harus diisi!', 'error');
+                return;
+            }
+
+            const data = { nama, cabang };
+
+            // Panggil fungsi untuk mengirim ke Google Sheets
+            await sendToGoogleSheets(type, data);
+            
+            // Simpan nama dan cabang ke localStorage agar tidak perlu input lagi
+            localStorage.setItem('presensi_nama', nama);
+            localStorage.setItem('presensi_cabang', cabang);
         }
 
-        // Simulate loading attendance stats
-        function updateAttendanceStats() {
-            document.getElementById('totalKaryawan').textContent = 100; // Dynamic value
-            document.getElementById('hadirHariIni').textContent = 80;  // Dynamic value
-            document.getElementById('sudahPulang').textContent = 60;   // Dynamic value
-            document.getElementById('belumPulang').textContent = 40;   // Dynamic value
-            const totalKaryawan = 100;  // Total employees
-            const hadir = 80;          // Total present
-            const persentase = Math.round((hadir / totalKaryawan) * 100);
-            document.getElementById('persentaseHadir').textContent = `${persentase}% dari ${totalKaryawan} karyawan`;
+        /**
+         * Memuat data status hari ini (menggunakan mock data karena tidak ada API real-time)
+         * Anda harus menyesuaikan ini jika Apps Script Anda memiliki endpoint status.
+         */
+        function loadStatusDashboard() {
+            const dashboard = document.getElementById('statusDashboard');
+            
+            // --- MOCK DATA SIMULASI ---
+            const mockData = {
+                total_hadir: 50,
+                sudah_pulang: 45,
+                belum_pulang: 5
+            };
+            // --- AKHIR MOCK DATA ---
+
+            // Jika Anda memiliki API Apps Script untuk status:
+            /*
+            fetch(`${GOOGLE_SHEETS_WEB_APP_URL}?action=reportToday`)
+                .then(res => res.json())
+                .then(mockData => {
+                    // Logika tampilan di sini
+                })
+                .catch(err => {
+                    dashboard.innerHTML = '<p class="text-red-500 text-sm">Gagal memuat status: API tidak tersedia.</p>';
+                });
+            */
+           
+            const { total_hadir, sudah_pulang, belum_pulang } = mockData;
+
+            dashboard.innerHTML = `
+                <div class="flex justify-between p-3 bg-blue-100 rounded-lg">
+                    <span class="text-gray-700 font-medium">Total Hadir</span>
+                    <span class="text-blue-700 font-bold">${total_hadir}</span>
+                </div>
+                <div class="flex justify-between p-3 bg-gray-100 rounded-lg">
+                    <span class="text-gray-700 font-medium">Sudah Pulang</span>
+                    <span class="text-gray-700 font-bold">${sudah_pulang}</span>
+                </div>
+                <div class="flex justify-between p-3 bg-yellow-100 rounded-lg">
+                    <span class="text-gray-700 font-medium">Belum Pulang</span>
+                    <span class="text-yellow-700 font-bold">${belum_pulang}</span>
+                </div>
+            `;
         }
 
-        // Simulate loading data from API (here it's mocked)
-        function loadDashboard() {
-            document.getElementById('loadingMessage').style.display = 'block'; // Show loading message
-            setTimeout(() => {
-                updateAttendanceStats();
-                document.getElementById('loadingMessage').style.display = 'none'; // Hide loading message
-            }, 2000); // Simulate network delay
+        /**
+         * Inisialisasi aplikasi saat dimuat
+         */
+        function initApp() {
+            // Isi form dari localStorage
+            const savedNama = localStorage.getItem('presensi_nama');
+            const savedCabang = localStorage.getItem('presensi_cabang');
+
+            if (savedNama) {
+                document.getElementById('nama').value = savedNama;
+            }
+            if (savedCabang) {
+                document.getElementById('cabang').value = savedCabang;
+            }
+            
+            // Muat status dashboard
+            loadStatusDashboard();
         }
 
-        // Call loadDashboard on page load
-        window.onload = loadDashboard;
+        // Jalankan inisialisasi setelah DOM siap
+        window.onload = initApp;
 
-        // Debounce function for filtering dashboard
-        let debounceFilterTimer = null;
-        function debounceLoadDashboard() {
-            if (debounceFilterTimer) clearTimeout(debounceFilterTimer);
-            debounceFilterTimer = setTimeout(function() {
-                loadDashboard();
-            }, 500);
-        }
-
-        // Function to reset filter
-        function resetFilter() {
-            document.getElementById('filterCabang').value = '';
-            document.getElementById('filterTanggal').value = '';
-            loadDashboard();
-        }
     </script>
 </body>
 </html>
